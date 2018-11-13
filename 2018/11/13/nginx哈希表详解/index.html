@@ -79,13 +79,13 @@
 
 
 
-<meta name="description" content="1.基本概念哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。 与普通哈希表不同，nginx哈希表有以下特点：  创建nginx哈希表时，所有的key-value键值对已经确定，哈希表创建完成后不允许再添加或者删除键值对 nginx哈希表并没有采用拉链法，而是开放地址法； nginx哈希表支持前">
+<meta name="description" content="1.基本概念哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。">
 <meta name="keywords" content="源码研究">
 <meta property="og:type" content="article">
 <meta property="og:title" content="nginx哈希表详解">
 <meta property="og:url" content="http://luoyuu.github.io/2018/11/13/nginx哈希表详解/index.html">
 <meta property="og:site_name" content="初見">
-<meta property="og:description" content="1.基本概念哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。 与普通哈希表不同，nginx哈希表有以下特点：  创建nginx哈希表时，所有的key-value键值对已经确定，哈希表创建完成后不允许再添加或者删除键值对 nginx哈希表并没有采用拉链法，而是开放地址法； nginx哈希表支持前">
+<meta property="og:description" content="1.基本概念哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。">
 <meta property="og:locale" content="zh-Hans">
 <meta property="og:image" content="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/location_tree.png">
 <meta property="og:image" content="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_whidcard-0.png">
@@ -94,10 +94,10 @@
 <meta property="og:image" content="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_whidcard-0-2.png">
 <meta property="og:image" content="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_array.png">
 <meta property="og:image" content="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_whidcard-0-3.png">
-<meta property="og:updated_time" content="2018-11-13T11:04:20.000Z">
+<meta property="og:updated_time" content="2018-11-13T11:24:36.000Z">
 <meta name="twitter:card" content="summary">
 <meta name="twitter:title" content="nginx哈希表详解">
-<meta name="twitter:description" content="1.基本概念哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。 与普通哈希表不同，nginx哈希表有以下特点：  创建nginx哈希表时，所有的key-value键值对已经确定，哈希表创建完成后不允许再添加或者删除键值对 nginx哈希表并没有采用拉链法，而是开放地址法； nginx哈希表支持前">
+<meta name="twitter:description" content="1.基本概念哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。">
 <meta name="twitter:image" content="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/location_tree.png">
 
 
@@ -195,6 +195,26 @@
               <i class="menu-item-icon fa fa-fw fa-home"></i> <br>
             
             首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br>
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br>
+            
+            分类
           </a>
         </li>
       
@@ -330,8 +350,7 @@
       
 
       
-        <h2 id="1-基本概念"><a href="#1-基本概念" class="headerlink" title="1.基本概念"></a>1.基本概念</h2><p>哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。</p>
-<p>与普通哈希表不同，nginx哈希表有以下特点：</p>
+        <h2 id="1-基本概念"><a href="#1-基本概念" class="headerlink" title="1.基本概念"></a>1.基本概念</h2><p>哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。<br><a id="more"></a><br>与普通哈希表不同，nginx哈希表有以下特点：</p>
 <ul>
 <li>创建nginx哈希表时，所有的key-value键值对已经确定，哈希表创建完成后不允许再添加或者删除键值对</li>
 <li>nginx哈希表并没有采用拉链法，而是开放地址法；</li>
@@ -537,22 +556,6 @@
       
 
       
-        <div class="post-nav">
-          <div class="post-nav-next post-nav-item">
-            
-              <a href="/2018/11/13/hello-world/" rel="next" title="Hello World">
-                <i class="fa fa-chevron-left"></i> Hello World
-              </a>
-            
-          </div>
-
-          <span class="post-nav-divider"></span>
-
-          <div class="post-nav-prev post-nav-item">
-            
-          </div>
-        </div>
-      
 
       
       
@@ -625,7 +628,7 @@
               
                 <a href="/archives/">
               
-                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-count">1</span>
                   <span class="site-state-item-name">日志</span>
                 </a>
               </div>
