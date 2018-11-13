@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+
+
+
+  
+
+
+<html class="theme-next muse use-motion" lang="zh-Hans">
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="theme-color" content="#222">
+
+
+
+
+
+
+
+
+
+<meta http-equiv="Cache-Control" content="no-transform">
+<meta http-equiv="Cache-Control" content="no-siteapp">
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+  <link href="/lib/fancybox/source/jquery.fancybox.css?v=2.1.5" rel="stylesheet" type="text/css">
+
+
+
+
+
+
+
+<link href="/lib/font-awesome/css/font-awesome.min.css?v=4.6.2" rel="stylesheet" type="text/css">
+
+<link href="/css/main.css?v=5.1.4" rel="stylesheet" type="text/css">
+
+
+  <link rel="apple-touch-icon" sizes="180x180" href="/images/apple-touch-icon-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="32x32" href="/images/favicon-32x32-next.png?v=5.1.4">
+
+
+  <link rel="icon" type="image/png" sizes="16x16" href="/images/favicon-16x16-next.png?v=5.1.4">
+
+
+  <link rel="mask-icon" href="/images/logo.svg?v=5.1.4" color="#222">
+
+
+
+
+
+  <meta name="keywords" content="源码研究,">
+
+
+
+
+
+
+
+
+
+
+<meta name="description" content="问题引入多线程或者多进程程序访问同一个变量时，需要加锁才能实现变量的互斥访问，否则结果可能是无法预期的，即存在并发问题。解决并发问题通常有两种方案：">
+<meta name="keywords" content="源码研究">
+<meta property="og:type" content="article">
+<meta property="og:title" content="nginx中的锁与原子操作">
+<meta property="og:url" content="http://luoyuu.github.io/2018/11/13/nginx中的锁与原子操作/index.html">
+<meta property="og:site_name" content="初見">
+<meta property="og:description" content="问题引入多线程或者多进程程序访问同一个变量时，需要加锁才能实现变量的互斥访问，否则结果可能是无法预期的，即存在并发问题。解决并发问题通常有两种方案：">
+<meta property="og:locale" content="zh-Hans">
+<meta property="og:image" content="https://raw.githubusercontent.com/luoyuu/images/master/system/cpu-chache.png">
+<meta property="og:updated_time" content="2018-11-13T13:20:38.000Z">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="nginx中的锁与原子操作">
+<meta name="twitter:description" content="问题引入多线程或者多进程程序访问同一个变量时，需要加锁才能实现变量的互斥访问，否则结果可能是无法预期的，即存在并发问题。解决并发问题通常有两种方案：">
+<meta name="twitter:image" content="https://raw.githubusercontent.com/luoyuu/images/master/system/cpu-chache.png">
+
+
+
+<script type="text/javascript" id="hexo.configurations">
+  var NexT = window.NexT || {};
+  var CONFIG = {
+    root: '/',
+    scheme: 'Muse',
+    version: '5.1.4',
+    sidebar: {"position":"left","display":"post","offset":12,"b2t":false,"scrollpercent":false,"onmobile":false},
+    fancybox: true,
+    tabs: true,
+    motion: {"enable":true,"async":false,"transition":{"post_block":"fadeIn","post_header":"slideDownIn","post_body":"slideDownIn","coll_header":"slideLeftIn","sidebar":"slideUpIn"}},
+    duoshuo: {
+      userId: '0',
+      author: '博主'
+    },
+    algolia: {
+      applicationID: '',
+      apiKey: '',
+      indexName: '',
+      hits: {"per_page":10},
+      labels: {"input_placeholder":"Search for Posts","hits_empty":"We didn't find any results for the search: ${query}","hits_stats":"${hits} results found in ${time} ms"}
+    }
+  };
+</script>
+
+
+
+  <link rel="canonical" href="http://luoyuu.github.io/2018/11/13/nginx中的锁与原子操作/">
+
+
+
+
+
+  <title>nginx中的锁与原子操作 | 初見</title>
+  
+
+
+
+
+
+
+
+
+</head>
+
+<body itemscope="" itemtype="http://schema.org/WebPage" lang="zh-Hans">
+
+  
+  
+    
+  
+
+  <div class="container sidebar-position-left page-post-detail">
+    <div class="headband"></div>
+
+    <header id="header" class="header" itemscope="" itemtype="http://schema.org/WPHeader">
+      <div class="header-inner"><div class="site-brand-wrapper">
+  <div class="site-meta ">
+    
+
+    <div class="custom-logo-site-title">
+      <a href="/" class="brand" rel="start">
+        <span class="logo-line-before"><i></i></span>
+        <span class="site-title">初見</span>
+        <span class="logo-line-after"><i></i></span>
+      </a>
+    </div>
+      
+        <p class="site-subtitle"></p>
+      
+  </div>
+
+  <div class="site-nav-toggle">
+    <button>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+      <span class="btn-bar"></span>
+    </button>
+  </div>
+</div>
+
+<nav class="site-nav">
+  
+
+  
+    <ul id="menu" class="menu">
+      
+        
+        <li class="menu-item menu-item-home">
+          <a href="/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-home"></i> <br>
+            
+            首页
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-tags">
+          <a href="/tags/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-tags"></i> <br>
+            
+            标签
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-categories">
+          <a href="/categories/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-th"></i> <br>
+            
+            分类
+          </a>
+        </li>
+      
+        
+        <li class="menu-item menu-item-archives">
+          <a href="/archives/" rel="section">
+            
+              <i class="menu-item-icon fa fa-fw fa-archive"></i> <br>
+            
+            归档
+          </a>
+        </li>
+      
+
+      
+    </ul>
+  
+
+  
+</nav>
+
+
+
+ </div>
+    </header>
+
+    <main id="main" class="main">
+      <div class="main-inner">
+        <div class="content-wrap">
+          <div id="content" class="content">
+            
+
+  <div id="posts" class="posts-expand">
+    
+
+  
+
+  
+  
+  
+
+  <article class="post post-type-normal" itemscope="" itemtype="http://schema.org/Article">
+  
+  
+  
+  <div class="post-block">
+    <link itemprop="mainEntityOfPage" href="http://luoyuu.github.io/2018/11/13/nginx中的锁与原子操作/">
+
+    <span hidden itemprop="author" itemscope="" itemtype="http://schema.org/Person">
+      <meta itemprop="name" content="初見">
+      <meta itemprop="description" content="">
+      <meta itemprop="image" content="/images/avatar.gif">
+    </span>
+
+    <span hidden itemprop="publisher" itemscope="" itemtype="http://schema.org/Organization">
+      <meta itemprop="name" content="初見">
+    </span>
+
+    
+      <header class="post-header">
+
+        
+        
+          <h1 class="post-title" itemprop="name headline">nginx中的锁与原子操作</h1>
+        
+
+        <div class="post-meta">
+          <span class="post-time">
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-calendar-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">发表于</span>
+              
+              <time title="创建于" itemprop="dateCreated datePublished" datetime="2018-11-13T21:16:21+08:00">
+                2018-11-13
+              </time>
+            
+
+            
+
+            
+          </span>
+
+          
+            <span class="post-category">
+            
+              <span class="post-meta-divider">|</span>
+            
+              <span class="post-meta-item-icon">
+                <i class="fa fa-folder-o"></i>
+              </span>
+              
+                <span class="post-meta-item-text">分类于</span>
+              
+              
+                <span itemprop="about" itemscope="" itemtype="http://schema.org/Thing">
+                  <a href="/categories/nginx/" itemprop="url" rel="index">
+                    <span itemprop="name">nginx</span>
+                  </a>
+                </span>
+
+                
+                
+              
+            </span>
+          
+
+          
+            
+          
+
+          
+          
+
+          
+
+          
+
+          
+
+        </div>
+      </header>
+    
+
+    
+    
+    
+    <div class="post-body" itemprop="articleBody">
+
+      
+      
+
+      
+        <h1 id="问题引入"><a href="#问题引入" class="headerlink" title="问题引入"></a>问题引入</h1><p>多线程或者多进程程序访问同一个变量时，需要加锁才能实现变量的互斥访问，否则结果可能是无法预期的，即存在并发问题。解决并发问题通常有两种方案：<br><a id="more"></a></p>
+<p>1）加锁：访问变量之前加锁，只有加锁成功才能访问变量，访问变量之后需要释放锁；这种通常称为悲观锁，即认为每次变量访问都会导致并发问题，因此每次访问变量之前都加锁。</p>
+<p>2）原子操作：只要访问变量的操作是原子的，就不会导致并发问题。那表达式么i++是不是原子操作呢？</p>
+<p>nginx通常会有多个worker处理请求，多个worker之间需要通过抢锁的方式来实现监听事件的互斥处理，由函数ngx_shmtx_trylock实现抢锁逻辑，代码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ngx_uint_t ngx_shmtx_trylock(ngx_shmtx_t *mtx)</span><br><span class="line">&#123;</span><br><span class="line">    return (*mtx-&gt;lock == 0 &amp;&amp; ngx_atomic_cmp_set(mtx-&gt;lock, 0, ngx_pid));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>变量mtx-&gt;lock指向的是一块共享内存地址（所有worker都可以访问）；worker进程会尝试设置变量mtx-&gt;lock的值为当前进程号，如果设置成功，则说明抢锁成功，否则认为抢锁失败。</p>
+<p>注意ngx_atomic_cmp_set设置变量mtx-&gt;lock的值为当前进程号并不是无任何条件的，而是只有当变量mtx-&gt;lock值为0时才设置，否则不予设置。ngx_atomic_cmp_set是典型的比较-交换操作，且必须加锁或者是原子操作才行，函数实现方式下节分析。</p>
+<p>nginx有一些全局统计变量，比如说变量ngx_connection_counter，此类变量由所有worker进程共享，并发执行累加操作，由函数ngx_atomic_fetch_add实现；而该累加操作需要加锁或者时原子操作才行，函数实现方式下节分析。</p>
+<p>上面说的mtx-&gt;lock和ngx_connection_counter都是共享变量，所有worker进程都可以访问，这些变量在ngx_event_core_module模块的ngx_event_module_init函数创建，且该函数在fork worker进程之前执行。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br></pre></td><td class="code"><pre><span class="line">/* cl should be equal to or greater than cache line size */</span><br><span class="line"></span><br><span class="line">cl = 128;</span><br><span class="line"></span><br><span class="line">size = cl            /* ngx_accept_mutex */</span><br><span class="line">       + cl          /*ngx_connection_counter */</span><br><span class="line">       + cl;         /* ngx_temp_number */</span><br><span class="line">           </span><br><span class="line">if (ngx_shm_alloc(&amp;shm) != NGX_OK) &#123;</span><br><span class="line">     return NGX_ERROR;</span><br><span class="line">&#125;</span><br><span class="line">shared = shm.addr;</span><br><span class="line"></span><br><span class="line">if (ngx_shmtx_create(&amp;ngx_accept_mutex, (ngx_shmtx_sh_t *) shared,cycle-&gt;lock_file.data)!= NGX_OK)</span><br><span class="line">    &#123;</span><br><span class="line">        return NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line">    </span><br><span class="line">ngx_connection_counter = (ngx_atomic_t *) (shared + 1 * cl);</span><br></pre></td></tr></table></figure>
+<p>这里需要重点思考这么几个问题：</p>
+<p>1）cache_line_size是什么？我们都知道CPU与主存之间还存在着高速缓存，高速缓存的访问速率高于主存访问速率，因此主存中部分数据会被缓存在高速缓存中，CPU访问数据时会先从高速缓存中查找，如果没有命中才会访问主从。需要注意的是，主存中的数据并不是一字节一字节加载到高速缓存中的，而是每次加载一个数据块，该数据块的大小就称为cache_line_size，高速缓存中的这块存储空间称为一个缓存行。cache_line_size32字节，64字节不等，通常为64字节。</p>
+<p>2）此处cl取值128字节，可是cl为什么一定要大于等于cache_line_size？待下一节分析了原子操作函数实现方式后自然会明白的。</p>
+<p>3）函数ngx_shm_alloc是通过系统调用mmap分配的内存空间，首地址为shared；</p>
+<p>4）这里创建了三个共享变量ngx_accept_mutex、ngx_connection_counter和ngx_temp_number；函数ngx_shmtx_create使得ngx_accept_mutex-&gt;lock变量指向shared；ngx_connection_counter指向shared+128字节位置处，ngx_temp_number指向shared+256字节位置处。</p>
+<h1 id="原子操作函数实现方式"><a href="#原子操作函数实现方式" class="headerlink" title="原子操作函数实现方式"></a>原子操作函数实现方式</h1><p>据说gcc某版本以后内置了一些原子性操作函数（没有验证），如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br></pre></td><td class="code"><pre><span class="line">//原子加</span><br><span class="line">type __sync_fetch_and_add (type *ptr, type value);</span><br><span class="line">//原子减</span><br><span class="line">type __sync_fetch_and_sub (type *ptr, type value);</span><br><span class="line">//原子比较-交换，返回true</span><br><span class="line">bool __sync_bool_compare_and_swap(type* ptr, type oldValue, type newValue, ....);</span><br><span class="line">//原子比较交换，返回之前的值</span><br><span class="line">type __sync_val_compare_and_swap(type* ptr, type oldValue, type newValue, ....);</span><br></pre></td></tr></table></figure>
+<p>通过这些函数很容易解决上面说的多个worker抢锁，统计变量并发累计问题。nginx会检测系统是否支持上述方法，如果不支持会自己实现类似的原子性操作函数。</p>
+<p>源码目录下src/os/unix/ngx_gcc_atomic_amd64.h、src/os/unix/ngx_gcc_atomic_x86.h等文件针对不同操作系统实现了若干原子性操作函数。</p>
+<h2 id="内联汇编"><a href="#内联汇编" class="headerlink" title="内联汇编"></a>内联汇编</h2><p>可通过内联汇编向C代码中嵌入汇编语言。原子操作函数内部都使用到了内联汇编，因此这里需要做简要介绍；</p>
+<p>内联汇编格式如下，需要了解以下6个概念：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br></pre></td><td class="code"><pre><span class="line">asm ( </span><br><span class="line">汇编指令</span><br><span class="line">: 输出操作数（可选）</span><br><span class="line">: 输入操作数（可选）</span><br><span class="line">: 寄存器列表（表明哪些寄存器被修改，可选）</span><br><span class="line">);</span><br></pre></td></tr></table></figure>
+<p>1）寄存器通常有一些简称；</p>
+<ul>
+<li>r：表示使用一个通用寄存器，由GCC在%eax/%ax/%al, %ebx/%bx/%bl, %ecx/%cx/%cl, %edx/%dx/%dl中选取一个GCC认为合适的。 </li>
+<li>a：表示使用%eax / %ax / %al </li>
+<li>b：表示使用%ebx / %bx / %bl </li>
+<li>c：表示使用%ecx / %cx / %cl </li>
+<li>d：表示使用%edx / %dx / %dl </li>
+<li>m: 表示内存地址</li>
+<li>等</li>
+</ul>
+<p>2）汇编指令；</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">&quot; popl %0 &quot;</span><br><span class="line">&quot; movl %1, %%esi &quot;</span><br><span class="line">&quot; movl %2, %%edi &quot;</span><br></pre></td></tr></table></figure>
+<p>3）输入操作数，通常格式为——“寄存器简称/内存简称”(值)；这种称为寄存器约束或者内存约束，表明输入或者输出需要借助寄存器或者内存实现。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">: &quot;m&quot; (*lock), &quot;a&quot; (old), &quot;r&quot; (set)</span><br></pre></td></tr></table></figure>
+<p>4）输出操作数；</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">//+号表示既是输入参数又是输出参数</span><br><span class="line">:&quot;+r&quot; (add)</span><br><span class="line">//将寄存器%eax / %ax / %al存储到变量res中</span><br><span class="line">:&quot;=a&quot; (res)</span><br></pre></td></tr></table></figure>
+<p>5）寄存器列表，如</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">: &quot;cc&quot;, &quot;memory&quot;</span><br></pre></td></tr></table></figure>
+<p>cc表示会修改标志寄存器中的条件标志，memory表示会修改内存。</p>
+<p>6）占位符与volatile关键字</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">__asm__ volatile (</span><br><span class="line"></span><br><span class="line">    &quot;    xaddl  %0, %1;   &quot;</span><br><span class="line"></span><br><span class="line">    : &quot;+r&quot; (add) : &quot;m&quot; (*value) : &quot;cc&quot;, &quot;memory&quot;);</span><br></pre></td></tr></table></figure>
+<p>volatile表明禁止编译器优化；%0和%1顺序对应后面的输出或输入操作数，如%0对应”+r” (add)，%1对应”m” (*value)。</p>
+<h2 id="比较-交换原子实现"><a href="#比较-交换原子实现" class="headerlink" title="比较-交换原子实现"></a>比较-交换原子实现</h2><p>现代处理器都提供了比较-交换汇编指令cmpxchgl  r, [m]，且是原子操作。其含义如下为，如果eax寄存器的内容与[m]内存地址内容相等，则设置[m]内存地址内容为r寄存器的值。伪代码如下（标志寄存器zf位）：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br></pre></td><td class="code"><pre><span class="line">if (eax == [m]) &#123;</span><br><span class="line">	zf = 1;</span><br><span class="line">	[m] = r;</span><br><span class="line">&#125; else &#123;</span><br><span class="line">	zf = 0;</span><br><span class="line">	eax = [m];</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>因此利用指令cmpxchgl可以很容易实现原子性的比较-交换功能。</p>
+<p>但是想想这样有什么问题呢？对于单核CPU来说没任何问题，多核CPU则无法保证。（参考深入理解计算机系统第六章）以Intel Core i7处理器为例，其有四个核，且每个核都有自己的L1和L2高速缓存。</p>
+<p><img src="https://raw.githubusercontent.com/luoyuu/images/master/system/cpu-chache.png" alt="image"></p>
+<p>前面提到，主存中部分数据会被缓存在高速缓存中，CPU访问数据时会先从高速缓存中查找；那假如同一块内存地址同时被缓存在核0与核1的L2级高速缓存呢？此时如果核0与核1同时修改该地址内容，则会造成冲突。</p>
+<p>目前处理器都提供有lock指令；其可以锁住总线，其他CPU对内存的读写请求都会被阻塞，直到锁释放；不过目前处理器都采用锁缓存替代锁总线（锁总线的开销比较大），即lock指令会锁定一个缓存行。当某个CPU发出lock信号锁定某个缓存行时，其他CPU会使它们的高速缓存该缓存行失效，同时检测是对该缓存行中数据进行了修改，如果是则会写所有已修改的数据；当某个高速缓存行被锁定时，其他CPU都无法读写该缓存行；lock后的写操作会及时会写到内存中。</p>
+<p>以文件src/os/unix/ngx_gcc_atomic_x86.h为例。</p>
+<p>查看ngx_atomic_cmp_set函数实现如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">#define NGX_SMP_LOCK  &quot;lock;&quot;</span><br><span class="line"></span><br><span class="line">static ngx_inline ngx_atomic_uint_t</span><br><span class="line">ngx_atomic_cmp_set(ngx_atomic_t *lock, ngx_atomic_uint_t old,</span><br><span class="line">    ngx_atomic_uint_t set)</span><br><span class="line">&#123;</span><br><span class="line">    u_char  res;</span><br><span class="line"></span><br><span class="line">    __asm__ volatile (</span><br><span class="line"></span><br><span class="line">         NGX_SMP_LOCK</span><br><span class="line">    &quot;    cmpxchgl  %3, %1;   &quot;</span><br><span class="line">    &quot;    sete      %0;       &quot;</span><br><span class="line"></span><br><span class="line">    : &quot;=a&quot; (res) : &quot;m&quot; (*lock), &quot;a&quot; (old), &quot;r&quot; (set) : &quot;cc&quot;, &quot;memory&quot;);</span><br><span class="line"></span><br><span class="line">    return res;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>cmpxchgl即为上面说的原子比较-交换指令；sete取标志寄存器中ZF位的值，并存储在%0对应的操作数。函数最后返回标志寄存器zf位。</p>
+<p>累加指令格式为xaddl r [m]，含义如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">temp = [m];</span><br><span class="line">[m] += r;</span><br><span class="line">r = temp;</span><br></pre></td></tr></table></figure>
+<p>查看ngx_atomic_fetch_add函数实现：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">static ngx_inline ngx_atomic_int_t</span><br><span class="line">ngx_atomic_fetch_add(ngx_atomic_t *value, ngx_atomic_int_t add)</span><br><span class="line">&#123;</span><br><span class="line">    __asm__ volatile (</span><br><span class="line"></span><br><span class="line">         NGX_SMP_LOCK</span><br><span class="line">    &quot;    xaddl  %0, %1;   &quot;</span><br><span class="line"></span><br><span class="line">    : &quot;+r&quot; (add) : &quot;m&quot; (*value) : &quot;cc&quot;, &quot;memory&quot;);</span><br><span class="line"></span><br><span class="line">    return add;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>指令xaddl实现了加法功能，其将%0对应操作数加到%1对应操作数，函数最后返回累加之前的旧值。</p>
+<p>这里再回到第一小节，cl取值128字节，且注释表明cl一定要大于等于cache_line_size。cl是什么？三个共享变量之间的偏移量。那假如去掉这个限制，由于每个变量只占8字节，所以三个变量总共占24字节，假设cache_line_size即缓存行大小为64字节，即这三个共享变量可能属于同一个缓存行。</p>
+<p>那么当使用lock指令锁定ngx_accept_mutex-&gt;lock变量时，会锁定该变量所在的缓存行，从而导致对共享变量ngx_connection_counter和ngx_temp_number同样执行了锁定，此时其他CPU是无法访问这两个共享变量的。因此这里会限制cl大于等于缓存行大小。</p>
+<h1 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h1><p>本文简要介绍了nginx中锁的实现原理，多核高速缓存冲突问题，内联汇编简单语法，以及原子比较-交换操作和原子累加操作的实现。</p>
+<p>才疏学浅，如有错误或者不足，请指出。</p>
+
+      
+    </div>
+    
+    
+    
+
+    
+
+    
+
+    
+
+    <footer class="post-footer">
+      
+        <div class="post-tags">
+          
+            <a href="/tags/源码研究/" rel="tag"># 源码研究</a>
+          
+        </div>
+      
+
+      
+      
+      
+
+      
+        <div class="post-nav">
+          <div class="post-nav-next post-nav-item">
+            
+              <a href="/2018/11/13/nginx哈希表详解/" rel="next" title="nginx哈希表详解">
+                <i class="fa fa-chevron-left"></i> nginx哈希表详解
+              </a>
+            
+          </div>
+
+          <span class="post-nav-divider"></span>
+
+          <div class="post-nav-prev post-nav-item">
+            
+          </div>
+        </div>
+      
+
+      
+      
+    </footer>
+  </div>
+  
+  
+  
+  </article>
+
+
+
+    <div class="post-spread">
+      
+    </div>
+  </div>
+
+
+          </div>
+          
+
+
+          
+
+  
+
+
+
+        </div>
+        
+          
+  
+  <div class="sidebar-toggle">
+    <div class="sidebar-toggle-line-wrap">
+      <span class="sidebar-toggle-line sidebar-toggle-line-first"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-middle"></span>
+      <span class="sidebar-toggle-line sidebar-toggle-line-last"></span>
+    </div>
+  </div>
+
+  <aside id="sidebar" class="sidebar">
+    
+    <div class="sidebar-inner">
+
+      
+
+      
+        <ul class="sidebar-nav motion-element">
+          <li class="sidebar-nav-toc sidebar-nav-active" data-target="post-toc-wrap">
+            文章目录
+          </li>
+          <li class="sidebar-nav-overview" data-target="site-overview-wrap">
+            站点概览
+          </li>
+        </ul>
+      
+
+      <section class="site-overview-wrap sidebar-panel">
+        <div class="site-overview">
+          <div class="site-author motion-element" itemprop="author" itemscope="" itemtype="http://schema.org/Person">
+            
+              <p class="site-author-name" itemprop="name">初見</p>
+              <p class="site-description motion-element" itemprop="description">人生若只如初見</p>
+          </div>
+
+          <nav class="site-state motion-element">
+
+            
+              <div class="site-state-item site-state-posts">
+              
+                <a href="/archives/">
+              
+                  <span class="site-state-item-count">2</span>
+                  <span class="site-state-item-name">日志</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-categories">
+                <a href="/categories/index.html">
+                  <span class="site-state-item-count">1</span>
+                  <span class="site-state-item-name">分类</span>
+                </a>
+              </div>
+            
+
+            
+              
+              
+              <div class="site-state-item site-state-tags">
+                <a href="/tags/index.html">
+                  <span class="site-state-item-count">3</span>
+                  <span class="site-state-item-name">标签</span>
+                </a>
+              </div>
+            
+
+          </nav>
+
+          
+
+          
+
+          
+          
+
+          
+          
+
+          
+
+        </div>
+      </section>
+
+      
+      <!--noindex-->
+        <section class="post-toc-wrap motion-element sidebar-panel sidebar-panel-active">
+          <div class="post-toc">
+
+            
+              
+            
+
+            
+              <div class="post-toc-content"><ol class="nav"><li class="nav-item nav-level-1"><a class="nav-link" href="#问题引入"><span class="nav-number">1.</span> <span class="nav-text">问题引入</span></a></li><li class="nav-item nav-level-1"><a class="nav-link" href="#原子操作函数实现方式"><span class="nav-number">2.</span> <span class="nav-text">原子操作函数实现方式</span></a><ol class="nav-child"><li class="nav-item nav-level-2"><a class="nav-link" href="#内联汇编"><span class="nav-number">2.1.</span> <span class="nav-text">内联汇编</span></a></li><li class="nav-item nav-level-2"><a class="nav-link" href="#比较-交换原子实现"><span class="nav-number">2.2.</span> <span class="nav-text">比较-交换原子实现</span></a></li></ol></li><li class="nav-item nav-level-1"><a class="nav-link" href="#总结"><span class="nav-number">3.</span> <span class="nav-text">总结</span></a></li></ol></div>
+            
+
+          </div>
+        </section>
+      <!--/noindex-->
+      
+
+      
+
+    </div>
+  </aside>
+
+
+        
+      </div>
+    </main>
+
+    <footer id="footer" class="footer">
+      <div class="footer-inner">
+        <div class="copyright">&copy; <span itemprop="copyrightYear">2018</span>
+  <span class="with-love">
+    <i class="fa fa-user"></i>
+  </span>
+  <span class="author" itemprop="copyrightHolder">初見</span>
+
+  
+</div>
+
+
+  <div class="powered-by">由 <a class="theme-link" target="_blank" href="https://hexo.io">Hexo</a> 强力驱动</div>
+
+
+
+  <span class="post-meta-divider">|</span>
+
+
+
+  <div class="theme-info">主题 &mdash; <a class="theme-link" target="_blank" href="https://github.com/iissnan/hexo-theme-next">NexT.Muse</a> v5.1.4</div>
+
+
+
+
+        
+
+
+
+
+
+
+
+        
+      </div>
+    </footer>
+
+    
+      <div class="back-to-top">
+        <i class="fa fa-arrow-up"></i>
+        
+      </div>
+    
+
+    
+
+  </div>
+
+  
+
+<script type="text/javascript">
+  if (Object.prototype.toString.call(window.Promise) !== '[object Function]') {
+    window.Promise = null;
+  }
+</script>
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery/index.js?v=2.1.3"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fastclick/lib/fastclick.min.js?v=1.0.6"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/jquery_lazyload/jquery.lazyload.js?v=1.9.7"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/velocity/velocity.ui.min.js?v=1.2.1"></script>
+  
+
+  
+  
+    <script type="text/javascript" src="/lib/fancybox/source/jquery.fancybox.pack.js?v=2.1.5"></script>
+  
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/utils.js?v=5.1.4"></script>
+
+  <script type="text/javascript" src="/js/src/motion.js?v=5.1.4"></script>
+
+
+
+  
+  
+
+  
+  <script type="text/javascript" src="/js/src/scrollspy.js?v=5.1.4"></script>
+<script type="text/javascript" src="/js/src/post-details.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  <script type="text/javascript" src="/js/src/bootstrap.js?v=5.1.4"></script>
+
+
+
+  
+
+
+  
+
+
+
+
+	
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
+
+
+
+
+  
+
+  
+
+  
+
+  
+  
+
+  
+
+  
+
+  
+
+</body>
+</html>
