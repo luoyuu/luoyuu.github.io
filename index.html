@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html>
+<head><meta name="generator" content="Hexo 3.8.0">
+  <meta charset="utf-8">
+  
+
+  
+  <title>初見</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta name="description" content="人生若只如初見">
+<meta property="og:type" content="website">
+<meta property="og:title" content="初見">
+<meta property="og:url" content="http://luoyuu.github.io/index.html">
+<meta property="og:site_name" content="初見">
+<meta property="og:description" content="人生若只如初見">
+<meta property="og:locale" content="zh-Hans">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="初見">
+<meta name="twitter:description" content="人生若只如初見">
+  
+    <link rel="alternate" href="/atom.xml" title="初見" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+</html>
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">初見</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://luoyuu.github.io"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="post-nginx哈希表详解" class="article article-type-post" itemscope="" itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/11/13/nginx哈希表详解/" class="article-date">
+  <time datetime="2018-11-13T11:00:30.000Z" itemprop="datePublished">2018-11-13</time>
+</a>
+    
+  <div class="article-category">
+    <a class="article-category-link" href="/categories/nginx/">nginx</a>
+  </div>
+
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/11/13/nginx哈希表详解/">nginx哈希表详解</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h2 id="1-基本概念"><a href="#1-基本概念" class="headerlink" title="1.基本概念"></a>1.基本概念</h2><p>哈希表是一种存储键值对（key-value）的数据结构，根据键查找值的时间复杂度为O(1)。我们经常见到的哈希表都是采用数组+链表实现（即所谓的拉链法）。</p>
+<p>与普通哈希表不同，nginx哈希表有以下特点：</p>
+<ul>
+<li>创建nginx哈希表时，所有的key-value键值对已经确定，哈希表创建完成后不允许再添加或者删除键值对</li>
+<li>nginx哈希表并没有采用拉链法，而是开放地址法；</li>
+<li>nginx哈希表支持前缀与后缀通配符，比如说“<em>.example.com”、“<a href="http://www.example" target="_blank" rel="noopener">www.example</a>.</em>”，其实现了类似于最大前缀匹配与最大后缀匹配的功能。</li>
+</ul>
+<p>第一点简化了nginx哈希表的实现；第二点开放地址法可能很多人都不太熟悉；而最大前缀匹配和最大后缀匹配功能难度较大。</p>
+<p>最大前缀匹配与最大后缀匹配最容易实现的方式就是遍历了，此时时间复杂度为O(N)。</p>
+<p>而nginx在location匹配时，同样存在最大前缀匹配功能，比如“location /uri {}”，想想这是怎么实现的？location配置被组织成为了一棵三叉树，如图1所示。节点node可能会有三个子节点，left、right与tree；left节点的uri小于node节点的uri，且left节点的uri不是node节点uri的子字符串；right节点的uri大于node节点的uri，且node节点的uri不是right节点uri的子字符串；node节点的uri是tree节点的子字符串。此时location最大前缀匹配时间复杂度为O(logN)。</p>
+<p><img src="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/location_tree.png" alt="image"></p>
+<p>图1：location树示意图</p>
+<p>为什么location最大前缀匹配不能使用哈希表实现呢？复杂度不是可以达到O(1)吗？</p>
+<p>需要注意的是nginx哈希表支持前缀与后缀通配符并不是无任何限制的，只支持这三种格式：”*.example.com”、”.example.com”和”<a href="http://www.example.*&quot;。想想这种格式与location配置有什么不同呢？location只是普通的字符串匹配，而这里匹配的通常是类似于host这种使用点号分割的，点号将匹配字符串分割成为了很有限的子字符串，可以为这些子字符串建立哈希表，这时候的哈希表也成为了多级哈希表。示意图如图2所示：" target="_blank" rel="noopener">www.example.*&quot;。想想这种格式与location配置有什么不同呢？location只是普通的字符串匹配，而这里匹配的通常是类似于host这种使用点号分割的，点号将匹配字符串分割成为了很有限的子字符串，可以为这些子字符串建立哈希表，这时候的哈希表也成为了多级哈希表。示意图如图2所示：</a></p>
+<p><img src="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_whidcard-0.png" alt="image"></p>
+<p>图2：多级通配符哈希表示意图</p>
+<p>这里再思考一个问题：”*.example.com”和 “.example.com”都用于前缀匹配，有什么区别吗？这里的<em>其实表示的是至少一个字符，即输入字符串”example.com”时，只能匹配到”.example.com”；而输入字符串”<a href="http://www.example.com&quot;时，是能同时匹配到&quot;\" target="_blank" rel="noopener">www.example.com&quot;时，是能同时匹配到&quot;\</a></em>.example.com”和 “.example.com”的。读者可以做以下实验，配置多个server，验证host最终会匹配到哪个server_name。</p>
+<h2 id="2-nginx哈希表基本数据结构"><a href="#2-nginx哈希表基本数据结构" class="headerlink" title="2. nginx哈希表基本数据结构"></a>2. nginx哈希表基本数据结构</h2><p>1）结构体ngx_hash_elt_t表示哈希表的元素，即key-value键值对:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">typedef struct &#123;</span><br><span class="line">    void             *value;</span><br><span class="line">    u_short           len;</span><br><span class="line">    u_char            name[1];</span><br><span class="line">&#125; ngx_hash_elt_t;</span><br></pre></td></tr></table></figure>
+<p>value指向值对象；key通常为字符串，len为key长度，name柔性数组存储key内容。</p>
+<p>2）普通哈希表（没有前缀匹配符与后缀匹配功能）使用结构体ngx_hash_t表示：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">typedef struct &#123;</span><br><span class="line">    ngx_hash_elt_t  **buckets;</span><br><span class="line">    ngx_uint_t        size;</span><br><span class="line">&#125; ngx_hash_t;</span><br></pre></td></tr></table></figure>
+<p>buckets桶数组，数组中每个元素的类型为ngx_hash_elt_t *，指向当前桶的第一个哈希元素；size为桶数目，hash值对size取模计算桶索引。</p>
+<p>所有的哈希元素连续存储在一个字节数组中，当hash冲突时桶，bucket可能需要存储多个哈希元素，这时候如何处理？观察ngx_hash_elt_t结构，元素长度是很容易计算的，所以多个哈希元素连续存储即可，且每个桶的最后都有一个8字节的NULL。</p>
+<p>普通哈希表结构如图3所示（元素类型即为ngx_hash_elt_t）：</p>
+<p><img src="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash.png" alt="image"></p>
+<p>图3：普通哈希表结构</p>
+<p>3）nginx多级通配符哈希表与图2非常类似（包含一个头部value与普通哈希表），使用结构ngx_hash_wildcard_t表示，其定义如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">typedef struct &#123;</span><br><span class="line">    ngx_hash_t        hash;</span><br><span class="line">    void             *value;</span><br><span class="line">&#125; ngx_hash_wildcard_t;</span><br></pre></td></tr></table></figure>
+<p>多级通配符哈希表通常使用下面代码分配内存空间：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">hinit-&gt;hash = ngx_pcalloc(hinit-&gt;pool, sizeof(ngx_hash_wildcard_t) + size * sizeof(ngx_hash_elt_t *));</span><br><span class="line"></span><br><span class="line">buckets = (ngx_hash_elt_t **)((u_char *) hinit-&gt;hash + sizeof(ngx_hash_wildcard_t));</span><br><span class="line"></span><br><span class="line">hinit-&gt;hash-&gt;buckets = buckets;</span><br></pre></td></tr></table></figure>
+<p>其中size为桶bucket数目；上面代码创建的通配符哈希表结构如图4所示：</p>
+<p><img src="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_whidcard-1.png" alt="image"></p>
+<p>图4 通配符哈希表示意图</p>
+<p>假设需要创建一个后缀通配符哈希表，包含key-value为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">apache.* =&gt; value1</span><br><span class="line">nginx.* =&gt; value2</span><br><span class="line">nginx.doc.* =&gt; value3</span><br><span class="line">nginx.api.* =&gt; value4</span><br><span class="line">nginx.api.test.* =&gt;value5</span><br></pre></td></tr></table></figure>
+<p>此时最终创建的多级通配符哈希表如图5所示，后面会详细介绍创建过程。</p>
+<p><img src="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_whidcard-0-2.png" alt="image"><br>图5 多级通配符哈希表</p>
+<p>4）第一节提到，创建nginx哈希表时，所有的key-value键值对已经确定；因此可以预先计算合适的桶bucket数目，以及每个bucket负责存储哪些key-value等，从而为每个bucket分配足够的内存空间。</p>
+<p>但是，如何确保这些key-value键值对的key没有重复呢？针对这些已有的key-value需要有一个去重过程，去重后的元素即为最终哈希表的所有元素；去重过程会创建一个临时的数据结构ngx_hash_keys_arrays_t，该结构用于保存去重后的所有key-value，待创建完成哈希表后这个结构会被释放。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">typedef struct &#123;</span><br><span class="line">    ngx_uint_t        hsize;</span><br><span class="line"></span><br><span class="line">    ngx_pool_t       *pool;</span><br><span class="line">    ngx_pool_t       *temp_pool;</span><br><span class="line"></span><br><span class="line">    ngx_array_t       keys;</span><br><span class="line">    ngx_array_t      *keys_hash;</span><br><span class="line"></span><br><span class="line">    ngx_array_t       dns_wc_head;</span><br><span class="line">    ngx_array_t      *dns_wc_head_hash;</span><br><span class="line"></span><br><span class="line">    ngx_array_t       dns_wc_tail;</span><br><span class="line">    ngx_array_t      *dns_wc_tail_hash;</span><br><span class="line">&#125; ngx_hash_keys_arrays_t;</span><br></pre></td></tr></table></figure>
+<p>pool与temp_pool表示内存池，去重过程需要一些临时变量会在temp_pool分配空间，去重过程结束后会释放temp_pool内存池的所有空间；keys、dns_wc_head和dns_wc_tail是三个数组，分别存储普通字符串key、前缀通配符key和后缀通配符key（这些key都是去重后的）；注意这三个字段keys_hash、dns_wc_head_hash、dns_wc_tail_hash，这是三个哈希表，采用的是拉链法，毕竟采用哈希表实现去重的复杂度可以达到O(1)。</p>
+<p>ngx_hash_keys_arrays_t结构如图4所示：</p>
+<p><img src="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_array.png" alt="image"></p>
+<p>图6：ngx_hash_keys_arrays_t结构示意图</p>
+<h2 id="3-nginx哈希表源码分析"><a href="#3-nginx哈希表源码分析" class="headerlink" title="3.nginx哈希表源码分析"></a>3.nginx哈希表源码分析</h2><p>nginx哈希表相关API可以分为3类：</p>
+<p>1）哈希键数组相关</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ngx_int_t ngx_hash_keys_array_init(ngx_hash_keys_arrays_t *ha, ngx_uint_t type);</span><br><span class="line">ngx_int_t ngx_hash_add_key(ngx_hash_keys_arrays_t *ha, ngx_str_t *key, void *value, ngx_uint_t flags);</span><br></pre></td></tr></table></figure>
+<p>函数ngx_hash_keys_array_init初始化哈希键数组；函数ngx_hash_add_key向哈希键数组中添加键并实现去重功能（包括普通键，前缀与后缀键），其输入第一个参数为哈希键数组。</p>
+<p>2）哈希表创建</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ngx_int_t ngx_hash_init(ngx_hash_init_t *hinit, ngx_hash_key_t *names, ngx_uint_t nelts);</span><br><span class="line">ngx_int_t ngx_hash_wildcard_init(ngx_hash_init_t *hinit, ngx_hash_key_t *names, ngx_uint_t nelts);</span><br></pre></td></tr></table></figure>
+<p>函数ngx_hash_init创建一个普通哈希表；函数ngx_hash_wildcard_init创建的是多级通配符哈希表。两个函数的输入参数names为哈希键ngx_hash_key_t数组，nelts为哈希键数目。第一个输入参数hinit的类型为ngx_hash_init_t，其存储创建哈希表所需的一些变量，定义如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">typedef struct &#123;</span><br><span class="line">    ngx_hash_t       *hash;</span><br><span class="line">    ngx_hash_key_pt   key;</span><br><span class="line"></span><br><span class="line">    ngx_uint_t        max_size;</span><br><span class="line">    ngx_uint_t        bucket_size;</span><br><span class="line"></span><br><span class="line">    char             *name;</span><br><span class="line">    ngx_pool_t       *pool;</span><br><span class="line">    ngx_pool_t       *temp_pool;</span><br><span class="line">&#125; ngx_hash_init_t;</span><br></pre></td></tr></table></figure>
+<p>其中hash指向最终创建的哈希表；key是一个函数指针，用于计算键哈希值；max_sizewei最大桶数目；bucket_size为每个桶最大字节大小；name为哈希表的名称；pool和temp_pool为内存池，只是temp_pool表示的是临时内存池，创建完哈希表会被回收。</p>
+<p>3）查找哈希表</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br></pre></td><td class="code"><pre><span class="line">void *ngx_hash_find(ngx_hash_t *hash, ngx_uint_t key, u_char *name, size_t len);</span><br><span class="line">void *ngx_hash_find_wc_head(ngx_hash_wildcard_t *hwc, u_char *name, size_t len);</span><br><span class="line">void *ngx_hash_find_wc_tail(ngx_hash_wildcard_t *hwc, u_char *name, size_t len);</span><br></pre></td></tr></table></figure>
+<p>这三个函数分别实现了普通哈希表查找、前缀通配符哈希表查找和后缀通配符哈希表查找功能。</p>
+<h3 id="3-1-哈希键数组初始化"><a href="#3-1-哈希键数组初始化" class="headerlink" title="3.1 哈希键数组初始化"></a>3.1 哈希键数组初始化</h3><p>函数ngx_hash_keys_array_init只是初始化结构体ngx_hash_keys_arrays_t，比较简单，这里不做详述。</p>
+<p>函数ngx_hash_add_key向哈希键数组中添加键并去重，其主要包括以下6个过程：</p>
+<p>1）判断键类型（普通键/前缀通配符/后缀通配符）</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br></pre></td><td class="code"><pre><span class="line">if (key-&gt;len &gt; 1 &amp;&amp; key-&gt;data[0] == &apos;.&apos;) &#123;</span><br><span class="line">    skip = 1;</span><br><span class="line">    goto wildcard;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">if (key-&gt;len &gt; 2) &#123;</span><br><span class="line"></span><br><span class="line">    if (key-&gt;data[0] == &apos;*&apos; &amp;&amp; key-&gt;data[1] == &apos;.&apos;) &#123;</span><br><span class="line">        skip = 2;</span><br><span class="line">        goto wildcard;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    if (key-&gt;data[i - 2] == &apos;.&apos; &amp;&amp; key-&gt;data[i - 1] == &apos;*&apos;) &#123;</span><br><span class="line">        skip = 0;</span><br><span class="line">        last -= 2;</span><br><span class="line">        goto wildcard;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>变量skip表示跳过的字符串数目；变量last表示字符串结束索引；通过skip可以区分出键字符串的类型。</p>
+<table>
+<thead>
+<tr>
+<th>键字符串</th>
+<th>分类类型</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="http://www.example.com" target="_blank" rel="noopener">www.example.com</a></td>
+<td>无</td>
+</tr>
+<tr>
+<td>*.example.com</td>
+<td>skip=2</td>
+</tr>
+<tr>
+<td>.example.com</td>
+<td>skip=1</td>
+</tr>
+<tr>
+<td><a href="http://www.example." target="_blank" rel="noopener">www.example.</a>*</td>
+<td>skip=0</td>
+</tr>
+</tbody>
+</table>
+<p>2)普通键去重</p>
+<p>判断该键是否已经存在keys_hash哈希表中，如果不存在则添加该键到keys_hash哈希表与keys键数组中；如果存在则返回NGX_BUSY；</p>
+<p>3）skip=1第一次去重</p>
+<p>当键字符串格式为”.example.com”时，skip=1，第一节就提到其可以匹配输入字符串”example.com”。那假如普通键中存在着”example.com”呢？岂不是冲突了？所以对于skip=1这种类型，同样需要校验是否已经存在keys_hash哈希表中，如果存在则返回NGX_BUSY；</p>
+<p>4）前缀通配符转换</p>
+<p>前缀通配符格式”*.example.com”和 “.example.com”，无法直接通过哈希表实现前缀匹配功能，键格式需要做一步转换过程，如下表：</p>
+<table>
+<thead>
+<tr>
+<th>原始字符串</th>
+<th>转换结果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>*.example.com</td>
+<td>com.example.\0</td>
+</tr>
+<tr>
+<td>.example.com</td>
+<td>com.example\0</td>
+</tr>
+</tbody>
+</table>
+<p>转换后的字符串通过最后一个字符是否为点号可以区分两种前缀通配符格式。转换代码如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br></pre></td><td class="code"><pre><span class="line">for (i = last - 1; i; i--) &#123;</span><br><span class="line">    if (key-&gt;data[i] == &apos;.&apos;) &#123;</span><br><span class="line">        ngx_memcpy(&amp;p[n], &amp;key-&gt;data[i + 1], len);</span><br><span class="line">        n += len;</span><br><span class="line">        p[n++] = &apos;.&apos;;</span><br><span class="line">        len = 0;</span><br><span class="line">        continue;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    len++;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">if (len) &#123;</span><br><span class="line">    ngx_memcpy(&amp;p[n], &amp;key-&gt;data[1], len);</span><br><span class="line">    n += len;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>5）后缀通配符转换</p>
+<p>后缀通配符”<a href="http://www.example.*&quot;会转换为&quot;www.example\0&quot;；（后缀通配符只有一种格式，因此点号不需要保留）" target="_blank" rel="noopener">www.example.*&quot;会转换为&quot;www.example\0&quot;；（后缀通配符只有一种格式，因此点号不需要保留）</a></p>
+<p>6）通配符键去重</p>
+<p>校验前缀通配符键是否已经存在dns_wc_head_hash哈希表，如果存在则返回NGX_BUSY；如果不存在则将转换后的键字符串添加到dns_wc_head_hash哈希表和dns_wc_head键数组；</p>
+<p>校验后缀通配符键是否已经存在dns_wc_tail_hash哈希表，如果存在则返回NGX_BUSY；如果不存在则将转换后的键字符串添加到dns_wc_tail_hash哈希表和dns_wc_tail键数组；</p>
+<h3 id="3-2-创建普通哈希表"><a href="#3-2-创建普通哈希表" class="headerlink" title="3.2 创建普通哈希表"></a>3.2 创建普通哈希表</h3><p>nginx哈希表一大特点就是在创建哈希表时所有的key-value都已确定，且创建后不会再添加或者删除哈希元素。因此创建哈希表时可以预先计算好合适的桶桶数目，以及每个桶存储哪些元素，以及每个桶的字节大小等。因此创建普通哈希表可以分为以下7个过程：</p>
+<p>1）首先需要校验桶最大字节大小是否可以至少存储一个哈希元素</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">for (n = 0; n &lt; nelts; n++) &#123;</span><br><span class="line">    if (hinit-&gt;bucket_size &lt; NGX_HASH_ELT_SIZE(&amp;names[n]) + sizeof(void *))&#123;</span><br><span class="line">     </span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>哈希元素字节长度比较容易计算，需要按照8字节对齐，在GDB打印桶中元素时需要也别注意。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">#define NGX_HASH_ELT_SIZE(name)                                               \</span><br><span class="line">    (sizeof(void *) + ngx_align((name)-&gt;key.len + 2, sizeof(void *)))</span><br></pre></td></tr></table></figure>
+<p>2）选取合适的桶数目。什么样的桶数目才算是满足条件的呢？通数目已知，可以计算出每个哈希元素的桶索引，统计每个桶存储的哈希元素长度之和，只要没有超过桶最大字节大即可。</p>
+<p>计算合适的桶数目需要遍历，首先会粗略计算出一个最小桶数目start，最大桶数目max_size，在此范围内遍历即可。</p>
+<p>每个哈希元素最小为16字节，因此计算最小桶数目为（每个桶最后都有8字节的NULL表示桶结束）:</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">bucket_size = hinit-&gt;bucket_size - sizeof(void *);</span><br><span class="line"></span><br><span class="line">start = nelts / (bucket_size / (2 * sizeof(void *)));</span><br><span class="line">start = start ? start : 1;</span><br></pre></td></tr></table></figure>
+<p>其中nelts为哈希元素数目。</p>
+<p>这里还需要统计每个桶存储的哈希元素长度之和，因此分配test数组（用于计算桶元素总长度）：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">test = ngx_alloc(hinit-&gt;max_size * sizeof(u_short), hinit-&gt;pool-&gt;log);</span><br></pre></td></tr></table></figure>
+<p>遍历过程如下：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">for (size = start; size &lt;= hinit-&gt;max_size; size++) &#123;</span><br><span class="line"></span><br><span class="line">    ngx_memzero(test, size * sizeof(u_short));</span><br><span class="line"></span><br><span class="line">    for (n = 0; n &lt; nelts; n++) &#123;</span><br><span class="line">        if (names[n].key.data == NULL) &#123;</span><br><span class="line">            continue;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        key = names[n].key_hash % size;</span><br><span class="line">        test[key] = (u_short) (test[key] + NGX_HASH_ELT_SIZE(&amp;names[n]));</span><br><span class="line"></span><br><span class="line">        if (test[key] &gt; (u_short) bucket_size) &#123;</span><br><span class="line">            goto next;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    goto found;</span><br><span class="line"></span><br><span class="line">    next:</span><br><span class="line">        continue;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这块代码还是比较简单的。需要注意的是这里for循环使用的是goto next，不能直接continue吗？当然肯定是不行的。</p>
+<p>3）计算每个桶存储的所有哈希元素总长度，并分配空间</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br></pre></td><td class="code"><pre><span class="line">for (i = 0; i &lt; size; i++) &#123;</span><br><span class="line">        test[i] = sizeof(void *);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">for (n = 0; n &lt; nelts; n++) &#123;</span><br><span class="line">    if (names[n].key.data == NULL) &#123;</span><br><span class="line">        continue;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    key = names[n].key_hash % size;</span><br><span class="line">    test[key] = (u_short) (test[key] + NGX_HASH_ELT_SIZE(&amp;names[n]));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>size即为上面计算的桶数目。这里需要注意的是每个哈希桶最后肯定都有一个8字节的NULL表示桶结束。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br></pre></td><td class="code"><pre><span class="line">for (i = 0; i &lt; size; i++) &#123;</span><br><span class="line">    if (test[i] == sizeof(void *)) &#123;</span><br><span class="line">        continue;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    test[i] = (u_short) (ngx_align(test[i], ngx_cacheline_size));</span><br><span class="line"></span><br><span class="line">    len += test[i];</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">elts = ngx_palloc(hinit-&gt;pool, len + ngx_cacheline_size);</span><br></pre></td></tr></table></figure>
+<p>遍历test数组，计算所有桶总长度，并分配内存空间。注意这里在分配空间时，按照ngx_cacheline_size大小字节对齐了；CPU在加载内存中数据到高速缓存时，是一个加载一个数据块，数据块大小称之为cacheline_size，通常为64字节；分配内存时按照cacheline_size字节对齐加载到高速缓存效率较高。</p>
+<p>4）前面已经计算出每个桶所有元素总长度，因此这里可以将桶指针指向每个桶第一个元素首地址；</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">for (i = 0; i &lt; size; i++) &#123;</span><br><span class="line">    if (test[i] == sizeof(void *)) &#123;</span><br><span class="line">        continue;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    buckets[i] = (ngx_hash_elt_t *) elts;</span><br><span class="line">    elts += test[i];</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>5）存储每个哈希元素到响应桶位置；</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br></pre></td><td class="code"><pre><span class="line">for (n = 0; n &lt; nelts; n++) &#123;</span><br><span class="line">    if (names[n].key.data == NULL) &#123;</span><br><span class="line">        continue;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    key = names[n].key_hash % size;</span><br><span class="line">    elt = (ngx_hash_elt_t *) ((u_char *) buckets[key] + test[key]);</span><br><span class="line"></span><br><span class="line">    elt-&gt;value = names[n].value;</span><br><span class="line">    elt-&gt;len = (u_short) names[n].key.len;</span><br><span class="line"></span><br><span class="line">    ngx_strlow(elt-&gt;name, names[n].key.data, names[n].key.len);</span><br><span class="line"></span><br><span class="line">    test[key] = (u_short) (test[key] + NGX_HASH_ELT_SIZE(&amp;names[n]));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>6）每个桶最后添加8字节NULL结束标志；</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">for (i = 0; i &lt; size; i++) &#123;</span><br><span class="line">        if (buckets[i] == NULL) &#123;</span><br><span class="line">            continue;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        elt = (ngx_hash_elt_t *) ((u_char *) buckets[i] + test[i]);</span><br><span class="line"></span><br><span class="line">        elt-&gt;value = NULL;</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure>
+<p>7）一些收尾工作</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br></pre></td><td class="code"><pre><span class="line">ngx_free(test);</span><br><span class="line"></span><br><span class="line">    hinit-&gt;hash-&gt;buckets = buckets;</span><br><span class="line">    hinit-&gt;hash-&gt;size = size;</span><br></pre></td></tr></table></figure>
+<h3 id="3-3-创建前缀通配符哈希表"><a href="#3-3-创建前缀通配符哈希表" class="headerlink" title="3.3 创建前缀通配符哈希表"></a>3.3 创建前缀通配符哈希表</h3><p>前缀通配符哈希表重在分级，即按照点号将键字符串切割为多个子字符串，为第一个子字符串创建第一级哈希表，第二个子字符串创建第二级哈希表……；多级哈希表之间还之前了类似于链式引用。</p>
+<p>前缀通配符哈希表的创建函数为ngx_hash_wildcard_init，遍历所有哈希键，将其按照点号分割，并创建多级哈希表。函数通过递归调用实现多级哈希表的创建以及引用功能。</p>
+<p>将每个哈希键按照点号分割后，每一级的子字符串可能还需要做聚合操作。比如”com.api.”、”com.doc.”、”com.doc.nginx.”、”com.aoc.apache.”，分割后第一级子字符串4个都是com，第二级子字符串1个为api，三个为doc，第三级子字符串分别为nginx何apache；每一级子字符串相等时需要做聚合操作。</p>
+<p>另外需要注意一点的是，在调用函数ngx_hash_wildcard_init创建通配符哈希表之前，所有的哈希键都会进行排序，比如：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br></pre></td><td class="code"><pre><span class="line">ngx_qsort(ha.dns_wc_head.elts, (size_t) ha.dns_wc_head.nelts,</span><br><span class="line">                  sizeof(ngx_hash_key_t), ngx_http_cmp_dns_wildcards);</span><br></pre></td></tr></table></figure>
+<p>函数ngx_http_cmp_dns_wildcards为键比较函数，键按照字母序比较。</p>
+<p>为了更好的理解ngx_hash_wildcard_init函数实现，请参照下图7多级通配符哈希结构图表。</p>
+<p>字符串分割，聚合功能代码实现如下：<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">for (n = 0; n &lt; nelts; n = i) &#123;</span><br><span class="line">    for (len = 0; len &lt; names[n].key.len; len++) &#123;</span><br><span class="line">    	if (names[n].key.data[len] == &apos;.&apos;) &#123;</span><br><span class="line">        	dot = 1;</span><br><span class="line">        	break;</span><br><span class="line">    	&#125;</span><br><span class="line">	&#125;</span><br><span class="line">	</span><br><span class="line">	//当前级子字符串存储在变量curr_names；</span><br><span class="line">	//用于创建当前级哈希表</span><br><span class="line">	name = ngx_array_push(&amp;curr_names);</span><br><span class="line">	name-&gt;key.len = len;</span><br><span class="line">	name-&gt;key.data = names[n].key.data;</span><br><span class="line">	name-&gt;value = names[n].value;</span><br><span class="line"></span><br><span class="line">    //后续子字符串存储在变量next_names；</span><br><span class="line">    //用于递归调用函数ngx_hash_wildcard_init创建多级哈希表</span><br><span class="line">	if (names[n].key.len != len) &#123;</span><br><span class="line">        next_name = ngx_array_push(&amp;next_names);</span><br><span class="line">        if (next_name == NULL) &#123;</span><br><span class="line">            return NGX_ERROR;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        next_name-&gt;key.len = names[n].key.len - len;</span><br><span class="line">        next_name-&gt;key.data = names[n].key.data + len;</span><br><span class="line">        next_name-&gt;value = names[n].value;</span><br><span class="line">	&#125;</span><br><span class="line"></span><br><span class="line">    //注意在查找后续键字符串中当前级子字符串与当前键当前级子字符串相等的键</span><br><span class="line">	for (i = n + 1; i &lt; nelts; i++) &#123;</span><br><span class="line">        if (ngx_strncmp(names[n].key.data, names[i].key.data, len) != 0) &#123;</span><br><span class="line">            break;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        if (!dot</span><br><span class="line">            &amp;&amp; names[i].key.len &gt; len</span><br><span class="line">            &amp;&amp; names[i].key.data[len] != &apos;.&apos;)&#123;</span><br><span class="line">            break;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        next_name = ngx_array_push(&amp;next_names);</span><br><span class="line">        </span><br><span class="line"></span><br><span class="line">        next_name-&gt;key.len = names[i].key.len - dot_len;</span><br><span class="line">        next_name-&gt;key.data = names[i].key.data + dot_len;</span><br><span class="line">        next_name-&gt;value = names[i].value;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure></p>
+<p>变量curr_names存储的是当前级的子字符串，用于创建当前级哈希表；next_names存储的是下一级子字符串，用于递归调用函数ngx_hash_wildcard_init创建下一级哈希表。</p>
+<p>注意在查找后续键字符串中当前级子字符串与当前键当前级子字符串相等的键时，一旦发现子字符串不相等直接break结束循环，不需要遍历所有键字符串吗？肯定是不需要的，因为在调用函数ngx_hash_wildcard_init创建通配符哈希表之前，所有的哈希键都进行了排序。</p>
+<p>上面代码进行了键字符串的分割，子字符串的聚合，接下来会递归调用函数ngx_hash_wildcard_init创建下一级哈希表，并实现哈希表链级引用</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br></pre></td><td class="code"><pre><span class="line"></span><br><span class="line">for (n = 0; n &lt; nelts; n = i) &#123;</span><br><span class="line">	if (next_names.nelts) &#123;</span><br><span class="line"></span><br><span class="line">    h = *hinit;</span><br><span class="line">    h.hash = NULL;</span><br><span class="line">    //注意调用ngx_hash_wildcard_init函数时，都会初始化h.hash为null，待会分析为什么需要这么做</span><br><span class="line">    if (ngx_hash_wildcard_init(&amp;h, (ngx_hash_key_t *) next_names.elts,</span><br><span class="line">                               next_names.nelts)</span><br><span class="line">        != NGX_OK)</span><br><span class="line">    &#123;</span><br><span class="line">        return NGX_ERROR;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    wdc = (ngx_hash_wildcard_t *) h.hash;</span><br><span class="line"></span><br><span class="line">    //当前键已经处理完毕时，下一级哈希表头部value字段需要赋值</span><br><span class="line">    if (names[n].key.len == len) &#123;</span><br><span class="line">        wdc-&gt;value = names[n].value;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    //指向下一级哈希表首地址</span><br><span class="line">    name-&gt;value = (void *) ((uintptr_t) wdc | (dot ? 3 : 2));</span><br><span class="line"></span><br><span class="line">	&#125; else if (dot) &#123;</span><br><span class="line">	//指向哈希元素值对象</span><br><span class="line">    	name-&gt;value = (void *) ((uintptr_t) name-&gt;value | 1);</span><br><span class="line">	&#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>这里需要重点分析两点：</p>
+<p>1）调用ngx_hash_wildcard_init函数创建通配符哈希表时，为什么h.hash一定是NULL呢？原因在于函数ngx_hash_init创建哈希表时，会有这么一步操作：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br></pre></td><td class="code"><pre><span class="line">if (hinit-&gt;hash == NULL) &#123;</span><br><span class="line">    hinit-&gt;hash = ngx_pcalloc(hinit-&gt;pool, sizeof(ngx_hash_wildcard_t)+ size * sizeof(ngx_hash_elt_t *));</span><br><span class="line">        </span><br><span class="line">    buckets = (ngx_hash_elt_t **) ((u_char *) hinit-&gt;hash + sizeof(ngx_hash_wildcard_t));</span><br><span class="line"></span><br><span class="line">    </span><br><span class="line">&#125;else &#123;</span><br><span class="line">        buckets = ngx_pcalloc(hinit-&gt;pool, size * sizeof(ngx_hash_elt_t *));</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+<p>hinit-&gt;hash等于NULL时创建的是通配符哈希表结构；否则创建的是通用哈希表结构。</p>
+<p>2）创建完成下一级哈希表时，多级哈希表需要形成链式结构串起来。因此name-&gt;value字段存储的要么是下一级哈希表的首地址，要么直接是哈希元素值对象。</p>
+<p>注意这里判断变量dot是否为true，以及是否有下一级哈希表，会对value按位或上0、1、2或者3。令flag为value低位2比特，其标记value字段存储的是什么数据。</p>
+<p>当flag为0或者1时，表示value指向的是哈希元素值对象；当flag等于2或者3时，表示value指向的是下一级哈希表。</p>
+<p>那为什么需要判断遍历dot呢？还记得之前讲述的”*.example.com”和 “.example.com”前缀匹配的区别吗？这两者键字符串分别会被转换为”com.example.”和”com.example”，最后一个字符点号用于区分这两种类型，这里需要通过flag标记，否则查找时将无法区分了。</p>
+<p>想想为什么可以value按位或上0、1、2和3呢？不会修改value的值吗？因为value存储的是地址，且这块内存通常都会按照8字节或者其他字节对齐；即value的低2比特恒为0。</p>
+<p>下一级哈希表创建完毕后，会调用函数ngx_hash_init当前级哈希表，该函数已经讲过，这里不再赘述。</p>
+<p>假设需要创建一个前缀通配符哈希表，包含key-value为：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br></pre></td><td class="code"><pre><span class="line">*.apache =&gt; value1</span><br><span class="line">*.nginx =&gt; value2</span><br><span class="line">*.doc.nginx =&gt; value3</span><br><span class="line">*.api.nginx =&gt; value4</span><br><span class="line">*.test.api.nginx =&gt;value5</span><br></pre></td></tr></table></figure>
+<p>最终创建的多级通配符哈希表如图7所示:<br><img src="https://raw.githubusercontent.com/luoyuu/images/master/nginx/hash/hash_whidcard-0-3.png" alt="image"><br>图7 多级通配符哈希表结构</p>
+<h3 id="3-4-查找前缀通配符哈希表"><a href="#3-4-查找前缀通配符哈希表" class="headerlink" title="3.4 查找前缀通配符哈希表"></a>3.4 查找前缀通配符哈希表</h3><p>前缀通配符查找时，同样需要将输入字符串按照点号倒序分割，如example.com会分割为com和example两个子字符串；先使用com子字符串在第一级哈希表中查找，判断查找到的value类型是哈希元素值对象还是下一级哈希表地址，以及是”*.example.com”还是 “.example.com”前缀匹配，以此决定继续查找下一级哈希表，还是返回NUll，还是返回value。</p>
+<p>下面代码实现了输入字符串倒序分割的功能<br><figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br></pre></td><td class="code"><pre><span class="line">while (n) &#123;</span><br><span class="line">        if (name[n - 1] == &apos;.&apos;) &#123;</span><br><span class="line">            break;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        n--;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    key = 0;</span><br><span class="line"></span><br><span class="line">    for (i = n; i &lt; len; i++) &#123;</span><br><span class="line">        key = ngx_hash(key, name[i]);</span><br><span class="line">    &#125;</span><br></pre></td></tr></table></figure></p>
+<p>分割并计算该子字符串hash值后，会按照普通哈希表查找方式查找：</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">value = ngx_hash_find(&amp;hwc-&gt;hash, key, &amp;name[n], len - n);</span><br></pre></td></tr></table></figure>
+<p>函数ngx_hash_find实现比较简单，这里不做详述；难点应该在于value标志位的判定。</p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><span class="line">1</span><br><span class="line">2</span><br><span class="line">3</span><br><span class="line">4</span><br><span class="line">5</span><br><span class="line">6</span><br><span class="line">7</span><br><span class="line">8</span><br><span class="line">9</span><br><span class="line">10</span><br><span class="line">11</span><br><span class="line">12</span><br><span class="line">13</span><br><span class="line">14</span><br><span class="line">15</span><br><span class="line">16</span><br><span class="line">17</span><br><span class="line">18</span><br><span class="line">19</span><br><span class="line">20</span><br><span class="line">21</span><br><span class="line">22</span><br><span class="line">23</span><br><span class="line">24</span><br><span class="line">25</span><br><span class="line">26</span><br><span class="line">27</span><br><span class="line">28</span><br><span class="line">29</span><br><span class="line">30</span><br><span class="line">31</span><br><span class="line">32</span><br><span class="line">33</span><br><span class="line">34</span><br><span class="line">35</span><br><span class="line">36</span><br><span class="line">37</span><br><span class="line">38</span><br><span class="line">39</span><br><span class="line">40</span><br><span class="line">41</span><br><span class="line">42</span><br><span class="line">43</span><br><span class="line">44</span><br><span class="line">45</span><br><span class="line">46</span><br><span class="line">47</span><br><span class="line">48</span><br><span class="line">49</span><br></pre></td><td class="code"><pre><span class="line">//value标志位为2或者3，说明指向的是下一级哈希表</span><br><span class="line">if ((uintptr_t) value &amp; 2) &#123;</span><br><span class="line"></span><br><span class="line">    //当前输入字符串已经遍历结束</span><br><span class="line">    if (n == 0) &#123;</span><br><span class="line"></span><br><span class="line">        //value标志位为3；说明前缀匹配格式应该为&quot;*.example.com&quot;；</span><br><span class="line">        //此时不满足条件，返回NULL</span><br><span class="line">        if ((uintptr_t) value &amp; 1) &#123;</span><br><span class="line">            return NULL;</span><br><span class="line">        &#125;</span><br><span class="line"></span><br><span class="line">        //value标志位为2；说明前缀匹配格式应该为&quot;.example.com&quot;；</span><br><span class="line">        //返回头部value</span><br><span class="line">        hwc = (ngx_hash_wildcard_t *)</span><br><span class="line">                                  ((uintptr_t) value &amp; (uintptr_t) ~3);</span><br><span class="line">        return hwc-&gt;value;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    //没有遍历完输入字符串；</span><br><span class="line">    //继续查找下一级哈希表，输入字符串同时被修改了</span><br><span class="line">    hwc = (ngx_hash_wildcard_t *) ((uintptr_t) value &amp; (uintptr_t) ~3);</span><br><span class="line"></span><br><span class="line">    value = ngx_hash_find_wc_head(hwc, name, n - 1);</span><br><span class="line"></span><br><span class="line">    if (value) &#123;</span><br><span class="line">        return value;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    return hwc-&gt;value;</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">//value标志位为1，指向的是哈希元素值对象；</span><br><span class="line">//且前缀匹配格式应该为&quot;*.example.com&quot;</span><br><span class="line">if ((uintptr_t) value &amp; 1) &#123;</span><br><span class="line"></span><br><span class="line">    if (n == 0) &#123;</span><br><span class="line"></span><br><span class="line">        /* &quot;example.com&quot; */</span><br><span class="line"></span><br><span class="line">        return NULL;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    return (void *) ((uintptr_t) value &amp; (uintptr_t) ~3);</span><br><span class="line">&#125;</span><br><span class="line"></span><br><span class="line">//value标志位为0，指向的是哈希元素值对象；</span><br><span class="line">//且前缀匹配格式应该为&quot;.example.com&quot;;</span><br><span class="line">return value;</span><br></pre></td></tr></table></figure>
+<p>参照图7多级通配符哈希表结构图，标志位的判断以及value的取值应该比较容易理解了。</p>
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p>nginx哈希表基于开放地址法，且支持前缀后缀通配符哈希表，本文主要对普通哈希表与前缀通配符符哈希表做了详细介绍，后缀通配符哈希表同理可得。</p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://luoyuu.github.io/2018/11/13/nginx哈希表详解/" data-id="cjofn0o0k0001vqs6clt9k71g" class="article-share-link">Share</a>
+      
+      
+  <ul class="article-tag-list"><li class="article-tag-list-item"><a class="article-tag-list-link" href="/tags/源码研究/">源码研究</a></li></ul>
+
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+    <article id="post-hello-world" class="article article-type-post" itemscope="" itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2018/11/13/hello-world/" class="article-date">
+  <time datetime="2018-11-13T10:48:44.000Z" itemprop="datePublished">2018-11-13</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2018/11/13/hello-world/">Hello World</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <p>Welcome to <a href="https://hexo.io/" target="_blank" rel="noopener">Hexo</a>! This is your very first post. Check <a href="https://hexo.io/docs/" target="_blank" rel="noopener">documentation</a> for more info. If you get any problems when using Hexo, you can find the answer in <a href="https://hexo.io/docs/troubleshooting.html" target="_blank" rel="noopener">troubleshooting</a> or you can ask me on <a href="https://github.com/hexojs/hexo/issues" target="_blank" rel="noopener">GitHub</a>.</p>
+<h2 id="Quick-Start"><a href="#Quick-Start" class="headerlink" title="Quick Start"></a>Quick Start</h2><h3 id="Create-a-new-post"><a href="#Create-a-new-post" class="headerlink" title="Create a new post"></a>Create a new post</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo new <span class="string">"My New Post"</span></span><br></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/writing.html" target="_blank" rel="noopener">Writing</a></p>
+<h3 id="Run-server"><a href="#Run-server" class="headerlink" title="Run server"></a>Run server</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo server</span><br></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/server.html" target="_blank" rel="noopener">Server</a></p>
+<h3 id="Generate-static-files"><a href="#Generate-static-files" class="headerlink" title="Generate static files"></a>Generate static files</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo generate</span><br></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/generating.html" target="_blank" rel="noopener">Generating</a></p>
+<h3 id="Deploy-to-remote-sites"><a href="#Deploy-to-remote-sites" class="headerlink" title="Deploy to remote sites"></a>Deploy to remote sites</h3><figure class="highlight bash"><table><tr><td class="gutter"><pre><span class="line">1</span><br></pre></td><td class="code"><pre><span class="line">$ hexo deploy</span><br></pre></td></tr></table></figure>
+<p>More info: <a href="https://hexo.io/docs/deployment.html" target="_blank" rel="noopener">Deployment</a></p>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://luoyuu.github.io/2018/11/13/hello-world/" data-id="cjofn0nzu0000vqs6fqgxzk9s" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Categories</h3>
+    <div class="widget">
+      <ul class="category-list"><li class="category-list-item"><a class="category-list-link" href="/categories/nginx/">nginx</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tags</h3>
+    <div class="widget">
+      <ul class="tag-list"><li class="tag-list-item"><a class="tag-list-link" href="/tags/源码研究/">源码研究</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Tag Cloud</h3>
+    <div class="widget tagcloud">
+      <a href="/tags/源码研究/" style="font-size: 10px;">源码研究</a>
+    </div>
+  </div>
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2018/11/">November 2018</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2018/11/13/nginx哈希表详解/">nginx哈希表详解</a>
+          </li>
+        
+          <li>
+            <a href="/2018/11/13/hello-world/">Hello World</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2018 初見<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+
+
+  </div>
+</body>
+</html>
